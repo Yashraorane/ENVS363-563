@@ -1,0 +1,136 @@
+---
+title: "Week1"
+format: html
+editor: visual
+---
+
+```{r}
+#| echo: false
+2 * 2
+```
+
+```{r}
+#library(tidyverse) # a structure of data manipulation including several packages 
+#library(data.table)
+
+
+
+
+
+
+
+#census2021 <- read.csv("C:/Users/Aanand/Desktop/ENVS363+563/data/census2021_ethn/liv_pop.csv", row.names = "GeographyCode")
+
+#view(census2021)
+
+#head(census2021) # read first 5 rows
+
+#tail(census2021)
+
+#summary(census2021)
+
+#t(summary(census2021))
+
+#census2021$Total_Population <- rowSums(census2021[, c("Africa", "Middle.East.and.Asia", "Europe", "The.Americas.and.the.Caribbean", "Antarctica.and.Oceania")])
+
+#census2021 <- census2021 %>%
+#  mutate(Total_Pop = rowSums(select(., Africa, Middle.East.and.Asia, Europe, The.Americas.and.the.Caribbean, Antarctica.and.Oceania)))
+
+#head(census2021)
+
+#census2021$new_column <- 1
+#head(census2021)
+
+#census2021 <- subset(census2021, select = -new_column)
+
+
+#census2021 <- census2021 %>%
+#  mutate(new_column = 1)
+
+
+eu_tot_first4 <- census2021[c('E01006512', 'E01006513', 'E01006514', 'E01006515'), c('Total_Population', 'Europe')]
+
+eu_tot_first4
+```
+
+```{r}
+pop900 <- census2021 %>%
+  filter(Total_Population > 2500)
+
+pop900
+
+```
+
+```{r}
+euro750 <- census2021 %>%
+  filter(Europe < 650)
+
+euro750
+```
+
+```{r}
+oneOA <- census2021 %>%
+  filter(`Antarctica.and.Oceania` == 11)
+
+oneOA
+```
+
+```{r}
+ac25_l500 <- census2021 %>%
+  filter(The.Americas.and.the.Caribbean > 25, Total_Population < 1500)
+ac25_l500
+
+
+```
+
+```{r}
+db_pop_sorted <- census2021 %>%
+  arrange(desc(Total_Pop)) #sorts the dataframe by the "Total_Pop" column in descending order 
+
+head(db_pop_sorted)
+
+
+```
+
+```{r}
+# Specify the URL of the CSV file
+url <- "https://docs.google.com/spreadsheets/d/e/2PACX-1vRa7OIBiz7-yqmgwUEn4V5Wm1TO8rGow_wQVS1PWp--UTCAKqNUhtifECO5ZR9XrMd6Ddq9NxQwf1ll/pub?gid=0&single=true&output=csv"
+
+# Read the data from the URL into a DataFrame
+data <- read.csv(url)
+
+# see the data
+head(data)
+
+```
+
+```{r}
+colnames(data)
+
+```
+
+```{r}
+mindata <- group_by(data)%>%slice((which.min(data$Civilians)))
+view(mindata)
+```
+
+```{r}
+```
+
+```{r}
+Natocasual <- data %>% filter(data$Month =="August", data$Year=="2008")
+#view(Natocasual)
+glimpse(Natocasual)
+```
+
+```{r}
+
+data <- data %>% mutate_at(c('Taliban','Civilians','Afghan.forces','Nato..detailed.in.spreadsheet.','Nato...official.figures'),as.numeric)
+
+data <- data %>% mutate(data_by_month = rowSums(select(., Taliban,Civilians,Afghan.forces,Nato..detailed.in.spreadsheet.,Nato...official.figures)),na.rm = TRUE)
+
+
+maxdata<-group_by(data)%>%slice((which.max(data$Civilians)))
+
+maxdata$Month
+```

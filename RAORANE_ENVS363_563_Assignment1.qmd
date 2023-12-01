@@ -1,0 +1,182 @@
+---
+title: "RAORANE_ENVS363_563_Assignment1_201741048"
+toc: true
+format: 
+  html:
+    html-math-method: katex
+    code-tools: false
+    self-contained: true
+    embed-resources: true
+editor: visual
+execute: 
+  warning: false
+---
+
+# Installing Packages
+
+```{r}
+#Declaring libraries
+library(sf)
+library(ggplot2)
+library(raster)
+library(terra)
+library(exactextractr)
+library(dplyr)
+library(RColorBrewer)
+library(classInt)
+library(tmap)
+```
+
+# Your Annotated Code Task 1
+
+```{r}
+#importing, plotting and checking crs of tif file for 2020
+popraster2020 <- rast("C:/Users/Aanand/Desktop/ENVS363+563/gds-main/data/China/gpw_v4_population_count_rev11_2020_2pt5_min.tif")
+
+
+#plot(popraster2020$gpw_v4_population_count_rev11_2020_2pt5_min)
+crs(popraster2020)
+
+#importing,plotting and crs check of tif file for 2010
+popraster2010 <- rast("C:/Users/Aanand/Desktop/ENVS363+563/gds-main/data/China/gpw_v4_population_count_rev11_2010_2pt5_min.tif")
+
+#plot(popraster2010$gpw_v4_population_count_rev11_2010_2pt5_min)
+crs(popraster2010)
+```
+
+```{r}
+#import,plot and crs check of shapefile of region level 2
+shapedata <- read_sf("C:/Users/Aanand/Desktop/ENVS363+563/gds-main/data/China/gadm36_CHN_2.shp")
+plot(shapedata$geometry)
+crs(shapedata)
+```
+
+```{r}
+#crop and mask the raster data for 2020
+popraster2020_crop <- crop(popraster2020, shapedata)
+popraster2020_mask <- mask(popraster2020_crop, shapedata)
+
+#to extract mean data
+#have used progress as False so that in HTML file it will not show the extract progress 
+extractdata <- exact_extract(popraster2020_mask, shapedata, c("mean"),progress=FALSE)
+
+#adding column to shapedata
+shapedata$avg_density <- extractdata
+
+#to check first initial records
+head(shapedata$avg_density)
+```
+
+```{r}
+#create break for map 1 according to the avg density
+#here prefered quantile since its the best appraoch for balancing data distribution, also helps here to interpret the map easily.
+e_breaks <- classIntervals(shapedata$avg_density, n = 4, style = "quantile")
+
+# Assign the class breaks to the data
+shapedata$e_breaks <- cut(shapedata$avg_density, e_breaks$brks)
+
+
+#Create map using ggplot
+
+# Define a color palette for visualizing data.
+num_bins <-4
+cmap <- brewer.pal(num_bins, "PuBuGn")
+
+map1<-ggplot() +
+  geom_sf(data = shapedata, aes(fill = e_breaks)) +
+    theme_void() +
+  theme(legend.position = "bottom") + 
+  scale_fill_manual(values = cmap, name = "Avg Density", labels = c("Very Low", "Low", "Mediun", "High"),na.value = "transparent")+
+  labs(
+    title = "Population Density by Region 2020"
+  )
+```
+
+# Your Annotated Code Task 2
+
+```{r}
+#crop and mask the raster data for 2010
+popraster2010_crop <- crop(popraster2010, shapedata)
+popraster2010_mask <- mask(popraster2010_crop, shapedata)
+class(popraster2010_mask)
+class(popraster2020_mask)
+
+population_change_raster<-overlay(popraster2010, popraster2020, 
+fun=function(x,y)y-x)
+
+#difference between 2 raster data 
+#population_change_raster <- popraster2020_mask-popraster2010_mask
+
+#extract difference
+population_change_value <- extract(population_change_raster,shapedata)
+
+#summary of new raster data
+summary(population_change_value)
+
+```
+
+```{r}
+#define breaks and label
+breaks<-c(-Inf,-100,0,200,Inf)
+labels<-c("Decline","Neutral","Growth","High Growth")
+
+#converted listed raster values to numeric
+population_change_numeric <- as.numeric(unlist(population_change_value))
+
+#reclassify the numberic value of the raster data between 2020 and 2010
+classified_raster <- cut(population_change_numeric,breaks=breaks,labels=labels,include.lowest=TRUE)
+
+#classified_raster<-raster(population_change_numeric)
+classified_raster<-raster(population_change_raster)
+
+#setting the color
+colorpalette<- c("Decline" = "red","Neutral"= "yellow","Growth"="green","High Growth"="blue")
+
+#creating map
+map2<-tm_shape(classified_raster)+
+  tm_raster(style="pretty", palette = colorpalette)+
+  tm_shape(shapedata)+
+  tm_borders()+
+  tm_layout(title ="Categorial Change in Population Density 2010-2020",
+            frame = FALSE,
+            legend.outside = TRUE,
+            legend.outside.position = "right")+
+  tm_scale_bar(position=c("left", "bottom"))+tm_compass()
+```
+
+# Maps
+
+```{r}
+#Displaying Map1 and Map 2
+print(map1)
+tm_view(map2)
+```
+
+# Up to 500 words which should address the following questions.
+
+1.  What value is associated with each pixel?
+2.  Which CRS are you using? Justify your answer.
+3.  What is Map 1 saying about population density in China?
+4.  Which categorical divisions (Decline, Neutral, Growth and High Growth) did you chose for Map 2 and why?
+
+Commencing with the answer to above questions are as follows:
+
+1\] In Map1, trying to represent each pixel as the average population density of a specific region (regional level 2) in China for the year 2020, categorized into 5 section: "Very low", "Low", "Medium", "High" and "NA". Whereas In Map2, each pixel value is associated with the change in population density between the years 2010 and 2020. Also it is categorized into four classes: "Decline", "Neutral", "Growth" and "High Growth".
+
+2\] CRS used for this assignment is likely a standard geographic coordinates system named as WGS84 (EPSG:4326) \[note can be checked using command i.e. (crs(rast data file)). This defines how spatial data is interpreted, since it's widely used for global datasets, including population data. This choice ensures accurate spatial representation for the entire dataset.
+
+3\] In Map 1 a detailed view of population density in China at the regional level 2 for year 2020. It highlights variations in population density across different regions. Areas with higher population density are depicted with darker colors, while lighter colors represent lower population density. This maps allow us to identify regions with high, moderate, and low population density in China. As we can see in my map1 it tells us that high dense populated regions are in south-east region of China. Overall, China's majority west and north region has very low densely populated region.
+
+4\] For Map 2, we have selected four discrete categories: "Decline", "Neutral", "Growth" and "High Growth". These categories are based on change in population density between 2010 and 2020.
+
+"Decline" signifies regions where population density has decreased over the decade.
+
+"Neutral" indicates areas where population density has remained relatively stable.
+
+"Growth" represents region with a moderate increase in population density.
+
+"High growth" is used for areas with a substantial increase in population density.
+
+Reason behind using such category is it provides a nuanced view of population density trends and are essential for accessing regional development and resource allocation.
+
+In Summary, the assignment involves the analysis and visualization of population density changes in China over a decade. It employs a well-defined CRS to ensure data compatibility and provides two maps that offers insights into the nature of these changes.

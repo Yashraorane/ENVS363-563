@@ -1,0 +1,259 @@
+---
+title: "Week4.qmd"
+format: html
+editor: visual
+---
+
+```{r}
+# Provides various utility functions for R programming.
+library(R.utils)
+# For data manipulation and transformation.
+library(dplyr)
+# Spatial data
+library(sf)
+# Popular data visualization package in R.  
+library(ggplot2)
+# For creating thematic maps 
+library(tmap)
+# Color palettes suitable for data visualization, especially for those with color vision deficiencies.
+library(viridis)
+# A collection of color palettes for data visualization.
+library(RColorBrewer)
+# For working with raster data, such as gridded spatial data like satellite imagery or elevation data.
+library(raster)
+# An alternative to the 'raster' package and is used for working with large raster datasets efficiently.
+library(terra)
+# Tools for extracting data from raster layers at exact locations, often used in spatial analysis.
+library(exactextractr)
+# Common methods of the tidyverse packages for objects created with the {terra} package: SpatRaster and SpatVector
+library(tidyterra)
+```
+
+```{r}
+elevation <- rast("C:/Users/Aanand/Desktop/ENVS363+563/gds-main/data/Lebanon/LBN_elevation_w_bathymetry.tif")
+```
+
+```{r}
+plot(elevation) 
+```
+
+```{r}
+crs(elevation)
+```
+
+```{r}
+Lebanon_adm1 <- read_sf("C:/Users/Aanand/Desktop/ENVS363+563/gds-main/data/Lebanon/LBN_adm1.shp")
+plot(Lebanon_adm1$geometry)
+
+crs(Lebanon_adm1)
+```
+
+```{r}
+elevation <- terra::project(elevation, crs(Lebanon_adm1)) # reporjectig the elevation data to the crs of the Lebanon shapefile
+crs(elevation)
+```
+
+```{r}
+elevation_lebanon <- crop(elevation, extent(Lebanon_adm1))
+elevation_lebanon_mask <- mask(elevation_lebanon, Lebanon_adm1)
+```
+
+```{r}
+plot(elevation_lebanon_mask)
+plot(Lebanon_adm1$geometry, col= NA, add=T)
+```
+
+```{r}
+pal = rev(brewer.pal(6,"Oranges"))
+plot(elevation_lebanon_mask, breaks=c(-100,0,700,1200,1800,3300), col=pal)
+plot(Lebanon_adm1$geometry, col= NA, add=T)
+```
+
+```{r}
+# Define the palette
+pal <- rev(brewer.pal(6, "Oranges"))
+
+# Create the base map
+tm_shape(elevation_lebanon_mask) +
+  tm_raster(breaks = c(-100, 0, 700, 1200, 1800, 3300),
+            palette = pal) +  # Plot the raster with breaks and palette
+  tm_shape(Lebanon_adm1) +
+  tm_borders(lwd = 2) +  # Add borders to the administrative boundaries
+tm_layout(frame = FALSE, legend.outside = TRUE, legend.outside.position = "right")  # Remove frame
+```
+
+```{r}
+# import elevation data
+elevation_proj <- rast("C:/Users/Aanand/Desktop/ENVS363+563/gds-main/data/Lebanon/DEM_Leb_projected.tif")
+
+slope <- terra::terrain(elevation_proj, v="slope", neighbors=8, unit="degrees")
+plot(slope)
+```
+
+```{r}
+ggplot() +
+  geom_spatraster_contour(data = elevation_proj)
+```
+
+```{r}
+# Create a new ggplot2 plot object.
+ggplot() +
+  # Add a spatial raster contour layer to the plot.
+  geom_spatraster_contour(
+    data = elevation_proj,               # Use the 'elevation' data for this layer.
+    aes(color = after_stat(level)), # Color the contour lines based on 'level'.
+    binwidth = 100,                # Define the binwidth for contouring. Every 100 metres
+    linewidth = 0.4               # Set the line width for contour lines.
+  ) +
+  # Customize the color scale for contour lines.
+  scale_color_gradientn(
+    colours = hcl.colors(20, "Terrain2"), # Specify a color palette.
+    guide = guide_coloursteps()           # Use a color step guide for legend.
+  ) +
+  # Apply a minimalistic theme to the plot.
+  theme_minimal()
+
+```
+
+```{r}
+flood_risk <- app(elevation_proj, fun= function(x) ifelse(x<10, 1, 0))
+# This is an anonymous function defined within the 'app' function.
+# It checks each pixel (or cell) value in the 'elevation' raster or matrix.
+# If the pixel value is less than 10 meters, it assigns 1 to 'flood_risk'; otherwise, it assigns 0. This effectively creates a binary flood risk map, where 1 represents areas with a flood risk (elevation < 10m), and 0 represents areas with no flood risk (elevation >= 10m).
+plot(flood_risk)
+```
+
+```{r}
+# Load some geo-localised survey data 
+households <- read_sf("C:/Users/Aanand/Desktop/ENVS363+563/gds-main/data/Lebanon/random_survey_LBN.shp")
+
+# Using the 'raster::extract' function, it calculates the elevation values at the coordinates of the points. 'elevation' is a raster layer, and 'households' is point data representing household locations.
+housesales_elevation <- raster::extract(elevation,
+                                households)
+
+# Attach elevation at each point to the original housesales dataframe
+households <- cbind(households, housesales_elevation)
+
+# Check out the data
+head(households)
+```
+
+```{r}
+# Before we get to clean the data, let's go over a few useful function
+# set the working directory to where you saved the GY476 data
+
+# list files 
+list.files()
+
+# list files in a specific folder
+list.files(file.path("C:/Users/Aanand/Desktop/ENVS363+563/gds-main/data/Lebanon/Polygons"))
+
+# list files corresponding to a specific pattern ("shp" in the filename)
+list.files(file.path("C:/Users/Aanand/Desktop/ENVS363+563/gds-main/data/Lebanon/Polygons"), pattern = "shp")
+
+# list files corresponding to a specific pattern ("shp" at the end of the filename)
+shps <- list.files("C:/Users/Aanand/Desktop/ENVS363+563/gds-main/data/Lebanon/Polygons", pattern = "*.shp")
+
+# we can also select strings following a pattern inside a list or vector using grepl
+shps <- shps[grepl("Lebanon", shps)] 
+
+# let's extract the first element of the list "shps"
+file1 <- shps[1]
+file1
+
+# how many characters in the filename
+nchar(file1)
+
+# let's remove the last 4 charcters (the file extension)
+file1_short <- substr(file1, 1, nchar(file1)-4)
+
+# let's add something to the name (concatenate strings) - for example, a new extension ".tif"
+paste(file1_short, ".tif", sep="")
+
+# finally let's create a function MathOperations that first calculate the square and then add 3
+MathOperations <- function(x) {
+  sq <- x^2
+  z <- sq+3
+  return(z)
+}
+
+# try the function on 4, 5, 6
+MathOperations(4)
+MathOperations(5)
+MathOperations(6)
+
+# repeat this operation for the vector 4 to 6 (similar to a loop in STATA)
+lapply(4:6, function(x) MathOperations(x))
+```
+
+```{r}
+datafolder <- file.path("C:/Users/Aanand/Desktop/ENVS363+563/gds-main/data") # define the location of the data folder
+
+# list downloaded files: they are compressed files using the "tar" format
+tars <- list.files(file.path("C:/Users/Aanand/Desktop/ENVS363+563/gds-main/data/Kenya_Tanzania/scratch"), pattern = "*.tar")
+
+# unzip
+UnzipSelect <- function(i) {
+  untar(file.path(datafolder,"Kenya_Tanzania/scratch",i), exdir = file.path(datafolder, "Kenya_Tanzania/scratch")) # unzip
+  all.files <- list.files(file.path(datafolder,"Kenya_Tanzania/scratch"), pattern = paste0(substr(i, 6, 12), "*")) # list extracted files
+  gz <- all.files[grepl("web.stable_lights.avg_vis.tif.gz", all.files)] # select the TIF files
+  R.utils::gunzip(filename  = file.path(datafolder,"Kenya_Tanzania/scratch", gz),
+                  destname = file.path(datafolder,"Kenya_Tanzania", substr(gz, 1, nchar(gz) -3)),
+                  overwrite = TRUE) # unzip again
+}
+
+# loop over the TAR files
+# note that the function returns the last element created - in this example, the TIF files
+nl <- lapply(tars, UnzipSelect)
+
+# you can delete the scratch folder with the data we don't need
+# unlink(file.path(datafolder,"Kenya_Tanzania/scratch"), recursive = TRUE)
+```
+
+```{r}
+# load NL
+# we apply the function raster to each tif file to load the raster in the workspace
+nl_rasters <- lapply(nl, raster)
+# we stack the raster (only possible for rasters of the same extent and definition)
+nl_rasters_stack <- stack(nl_rasters)
+# plot the result
+plot(nl_rasters_stack,  
+     main=c("Nightlights 1992", "Nightlights 2013"),
+     axes=FALSE)
+```
+
+```{r}
+library(raster)
+```
+
+```{r}
+# summarize
+ex <- lapply(shps, function(x) exact_extract(nl_rasters_stack, x, c("sum", "mean", "count"), progress = FALSE))
+# lapply returns a list of two dataframes, we can use "do.call" to return each element of the list and iterate the function rbind
+# the results is a dataframe with the merged rows of the dataframes
+ex <- do.call("rbind", ex)
+
+# show first files
+head(ex)
+# summary
+summary(ex)
+```
+
+```{r}
+# merge together
+# we select each sf object and merge the rows
+# do.call() in R to apply a given function to a list as a whole
+# The rbind()  function can be used to bind or combine several vectors, matrices, or data frames by rows
+tza_ken <- do.call("rbind", shps)
+
+# inspect
+str(tza_ken)
+
+
+# plot
+plot(tza_ken$geometry)
+```
+
+```{r}
+names(nl_rasters_stack) <- c("NL1992", "NL2013")
+```

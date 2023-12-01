@@ -1,0 +1,22 @@
+---
+title: "week7"
+format: html
+editor: visual
+---
+
+```{r}
+library(sf)       # Loads the 'sf' package for working with spatial data, handling geometries, and performing spatial operations.
+library(tmap)     # Imports 'tmap' for creating thematic maps and visualizing spatial data.
+library(ggplot2)  # Loads 'ggplot2', a versatile package for creating high-quality visualizations and graphics.
+library(viridis)  # Imports 'viridis', a package offering color palettes designed for better perception by individuals with color vision deficiencies.
+library(GGally)   # Loads 'GGally' for extending 'ggplot2' with tools for exploring data with multiple plots.
+library(cluster)  # Imports 'cluster', a package for clustering methods used in data analysis.
+library(tidyverse) # Loads the 'tidyverse' collection of packages (including 'dplyr', 'ggplot2', 'tidyr', etc.) for data manipulation and visualization.
+library(spdep)    # Imports 'spdep' for spatial econometrics and spatial statistics.
+library(rgeoda)   # Loads 'rgeoda' for spatial analysis using Geoda functions in R.
+```
+
+```{r}
+# Read the file in
+abb <- read_sf("C:/Users/Aanand/Desktop/ENVS363+563/gds-main/data/London/Polygons/london_abb.gpkg")
+```

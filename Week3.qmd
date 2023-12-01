@@ -1,0 +1,300 @@
+---
+title: "Week3"
+format: html
+editor: visual
+---
+
+```{r}
+# Load the 'sf' library, which stands for Simple Features, used for working with spatial data.
+library(sf)
+# Load the 'tidyverse' library, a collection of packages for data manipulation and visualization.
+library(tidyverse)
+# Load the 'tmap' library, which is used for creating thematic maps and visualizing spatial data.
+library(tmap)
+# The 'readr' library provides a fast and user-friendly way to read data from common formats like CSV.
+library(readr)
+# Converts Between GeoJSON and simple feature objects
+library(geojsonsf) 
+# RColorBrewer library for creating visually appealing color schemes for plots and data visualizations
+library(RColorBrewer)
+# Corking with class intervals and classification methods, esp in the context of spatial data analysis.
+library(classInt)
+```
+
+```{r}
+mena_sf <- geojson_sf("C:/Users/Aanand/Desktop/ENVS363+563/gds-main/data/MENA/MENA.geojson") # we load the geojson using `geojson_sf`
+
+plot(mena_sf$geometry) # we plot the geometry to make sure it looks like it should
+```
+
+```{r}
+st_crs(mena_sf)
+```
+
+```{r}
+head(mena_sf)
+```
+
+```{r}
+world_dev <- read.csv("C:/Users/Aanand/Desktop/ENVS363+563/gds-main/data/MENA/mena_worlddevelop.csv") 
+```
+
+```{r}
+world_dev_sf <- left_join(mena_sf, 
+                       world_dev, 
+                       by=c("code_a3"="Country.Code"))
+```
+
+```{r}
+plot(world_dev_sf[,"income_group"])
+```
+
+```{r}
+tm_shape(world_dev_sf) + # data
+  tm_fill("income_group", title = "Income Groups")+ # variable and giving a title
+  tm_borders() + # add borders
+  tm_layout(legend.outside = TRUE, legend.outside.position = "bottom") # placing the legend
+```
+
+```{r}
+ggplot(data = world_dev_sf) +
+    geom_sf(aes(fill = income_group)) +
+  theme_void()
+```
+
+```{r}
+world_dev_filtered <- world_dev_sf %>%
+  # Step 1: Filter rows where Series.Name is "GDP per capita, PPP (current international $)"
+  filter(Series.Name == "GDP per capita, PPP (current international $)") %>% 
+  # Step 2: Further filter out rows where 'v_2015' is not missing (i.e., remove NA values)
+  filter(!is.na(v_2015)) %>% 
+  # Step 3: Mutate (modify) the 'v_2015' variable by rounding it to a whole number
+  mutate(v_2015 = round(as.numeric(v_2015))) 
+```
+
+```{r}
+# All the columns to convert
+columns_to_convert <- c("v_2010", "v_2015", "v_2020")
+
+# Loop through the columns and convert to numeric
+for (col in columns_to_convert) {
+  world_dev_sf[[col]] <- as.numeric(world_dev_sf[[col]])
+}
+```
+
+```{r}
+tm_basemap() +
+# Create a basic map using the tm_basemap() function.
+  tm_shape(world_dev_filtered) + 
+# Define the data source and shape to be used for the map using tm_shape().
+  tm_polygons("v_2015", palette = "YlGn", id = "name", n = 7, style= "equal") +
+# Add polygons to the map using the tm_polygons() function.
+# 'v_2015bis' is our variable within the 'world_dev_filtered' dataset.
+# The palette "YlGn" specifies the color palette for the polygons.
+# 'id' is set to "name," which means the 'name' column will be used to identify polygons.
+# 'n' is set to 7, which means the data will be divided into 7 classes.
+# 'style' is set to "equal," which indicates equal interval classification for the data.
+    tm_layout(
+    legend.outside = TRUE, legend.outside.position = "bottom",
+    title = "GDP per capita by Equal Interval Classification")
+```
+
+```{r}
+world_dev_filtered <- world_dev_filtered %>%
+  mutate(v_2015bis = round(v_2015 / 1000))
+```
+
+```{r}
+e_breaks <- classIntervals(world_dev_filtered$v_2015bis, n = 7, style = "equal")
+
+# Assign the class breaks to the data
+world_dev_filtered$e_breaks <- cut(world_dev_filtered$v_2015bis, e_breaks$brks)
+```
+
+```{r}
+num_bins <-7
+cmap <- brewer.pal(num_bins, "YlGn")
+
+ggplot() +
+  geom_sf(data = world_dev_filtered, aes(fill = e_breaks)) +
+  scale_fill_manual(
+    values = cmap,
+    name = "GDP per capita (in 1000s)",  # Improved legend title
+    labels = gsub("[,]", "-", paste0("$", gsub("[\\[\\]()]", " ", levels(world_dev_filtered$e_breaks), perl = TRUE)))  # Replace comma with hyphen, add dollar sign, and remove brackets/parentheses from labels
+  ) +
+  labs(
+    title = "GDP per capita by Equal Interval Classification",
+    fill = NULL  # Remove the fill label
+  ) +
+  theme_void() +
+  theme(legend.position = "bottom")
+```
+
+```{r}
+# Same step as above
+e_breaks <- classIntervals(world_dev_filtered$v_2015, n = 7, style = "equal")
+world_dev_filtered$e_breaks <- cut(world_dev_filtered$v_2015, e_breaks$brks)
+
+# Collect the values of the breaks
+e_break_values <- e_breaks$brks
+
+# Place the values in a dataframe
+e_break_values_df <- data.frame(BreakValues = e_break_values)
+
+# Create a ggplot2 visualization with 'world_dev_filtered' dataset as the data source
+# and 'v_2015' as the variable for the x-axis.
+ggplot(world_dev_filtered, aes(x = v_2015)) +
+# Add a density plot to the visualization with fill color set to dark blue
+# and transparency (alpha) set to 0.4.
+  geom_density(fill = "darkblue", alpha = 0.4) +
+# Add a rug plot (small tick marks) along the x-axis with transparency (alpha) set to 0.5.
+  geom_rug(alpha = 0.5) +
+# Add vertical lines to the plot based on the 'e_break_values_df' dataset
+# with x-intercepts specified by the 'BreakValues' variable.
+# The color of these lines is set to green.
+  geom_vline(data = e_break_values_df, aes(xintercept = BreakValues), color = "green") +
+# Apply the 'theme_minimal()' theme to the plot for a minimalistic appearance.
+  theme_minimal() +
+# Modify the x-axis label to display "GDP per capita in 2015".
+  labs(x = "GDP per capita in 2015")
+```
+
+```{r}
+tm_basemap() +
+  tm_shape(world_dev_filtered) +
+  tm_polygons("v_2015", palette = "YlGn", id = "WARD_NAME", n = 4, style= "quantile")   
+```
+
+```{r}
+# Find quantile breaks for data segmentation into four groups.
+qt_breaks <- classIntervals(world_dev_filtered$v_2015bis, n = 4, style = "quantile")
+
+# Assign the class breaks to the data
+world_dev_filtered$qt_breaks <- cut(world_dev_filtered$v_2015bis, qt_breaks$brks)
+```
+
+```{r}
+num_bins <-4
+# Define a color palette for visualizing data.
+cmap <- brewer.pal(num_bins, "YlGn")
+
+# plot
+ggplot() +
+  geom_sf(data = world_dev_filtered, aes(fill = qt_breaks)) +
+theme_void() + # remove x and y axis
+  scale_fill_manual(
+    values = cmap,
+    name = "GDP per capita (in 1000s)",  # Improved legend title
+    labels = gsub("[,]", "-", paste0("$", gsub("[\\[\\]()]", " ", levels(world_dev_filtered$qt_breaks), perl = TRUE)))) +  # Replace comma with hyphen, add dollar sign, and remove brackets/parentheses from labels 
+  labs(
+    title = "GDP per capita (Quantiles)",
+    fill = NULL  # Remove the fill label
+  ) +
+  theme_void() +
+  theme(legend.position = "bottom")
+```
+
+```{r}
+qt_breaks <- classIntervals(world_dev_filtered$v_2015, n = 4, style = "quantile")
+world_dev_filtered$qt_breaks <- cut(world_dev_filtered$v_2015, qt_breaks$brks)
+
+# Collect the values of the breaks
+qt_break_values <- qt_breaks$brks
+# Place the values in a dataframe
+qt_break_values_df <- data.frame(BreakValues = qt_break_values)
+
+# Create a ggplot2 visualization
+ggplot(world_dev_filtered, aes(x = v_2015)) +
+# Density plot 
+  geom_density(fill = "darkblue", alpha = 0.4) +
+# Add a rug plot (small tick marks) 
+  geom_rug(alpha = 0.5) +
+# Add vertical lines at 'BreakValues' 
+  geom_vline(data = qt_break_values_df, aes(xintercept = BreakValues), color = "green") +
+  theme_minimal() +
+  labs(x = "GDP per capita in 2015")
+```
+
+```{r}
+tm_basemap() +
+  tm_shape(world_dev_filtered) +
+  tm_polygons("v_2015", palette = "YlGn", id = "WARD_NAME", n = 4, style= "fisher")   
+```
+
+```{r}
+# Find fisher breaks for data segmentation into 5 groups.
+fish_breaks <- classIntervals(world_dev_filtered$v_2015bis, n = 4, style = "fisher")
+
+# Assign the class breaks to the data
+world_dev_filtered$fish_breaks <- cut(world_dev_filtered$v_2015bis, fish_breaks$brks)
+```
+
+```{r}
+num_bins <-4
+# Define a color palette for visualizing data.
+cmap <- brewer.pal(num_bins, "YlGn")
+
+# plot
+ggplot() +
+  geom_sf(data = world_dev_filtered, aes(fill = fish_breaks)) +
+theme_void() + # remove x and y axis
+  scale_fill_manual(
+    values = cmap,
+    name = "GDP per capita (in 1000s)",  # Improved legend title
+    labels = gsub("[,]", "-", paste0("$", gsub("[\\[\\]()]", " ", levels(world_dev_filtered$fish_breaks), perl = TRUE)))) +  # Replace comma with hyphen, add dollar sign, and remove brackets/parentheses from labels 
+  labs(
+    title = "GDP per capita (Quantiles)",
+    fill = NULL  # Remove the fill label
+  ) +
+  theme_void() +
+  theme(legend.position = "bottom")
+```
+
+```{r}
+fish_breaks <- classIntervals(world_dev_filtered$v_2015, n = 4, style = "fisher")
+world_dev_filtered$fish_breaks <- cut(world_dev_filtered$v_2015, fish_breaks$brks)
+
+# Collect the values of the breaks
+fish_break_values <- fish_breaks$brks
+# Place the values in a dataframe
+fish_break_values_df <- data.frame(BreakValues = fish_break_values)
+
+# Create a ggplot2 visualization
+ggplot(world_dev_filtered, aes(x = v_2015)) +
+# Density plot 
+  geom_density(fill = "darkblue", alpha = 0.4) +
+# Add a rug plot (small tick marks) 
+  geom_rug(alpha = 0.5) +
+# Add vertical lines at 'BreakValues' 
+  geom_vline(data = fish_break_values_df, aes(xintercept = BreakValues), color = "green") +
+  theme_minimal() +
+  labs(x = "GDP per capita in 2015")
+```
+
+```{r}
+ggplot(data = world_dev_sf) +
+  geom_sf(aes(fill = income_group)) +
+  scale_fill_brewer(palette = "Set4") +  # Use ColorBrewer palette
+  theme_void() +
+  coord_sf(xlim = c(30.763478, 40.332570), ylim = c(30.520606, 36.285000)) +
+  labs(fill = "Income Group")  # Add a legend title
+```
+
+```{r}
+library(sf)
+lsoas <- read_sf("C:/Users/Aanand/Desktop/ENVS363+563/gds-main/data/Liverpool/Access_to_Healthy_Assets_and_Hazards_AHAH/Local_Authority_Districts/E08000012/shapefiles/E08000012.shp")
+
+ahah_data <- read.csv("C:/Users/Aanand/Desktop/ENVS363+563/gds-main/data/Liverpool/Access_to_Healthy_Assets_and_Hazards_AHAH/Local_Authority_Districts/E08000012/tables/E08000012.csv") # import
+```
+
+```{r}
+test1 <- left_join(lsoas, 
+                       ahah_data, 
+                       by="lsoa11cd")
+```
+
+```{r}
+ggplot(data = test1) +
+    geom_sf(aes(fill = income_group)) +
+  theme_void()
+```

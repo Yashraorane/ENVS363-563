@@ -1,0 +1,411 @@
+---
+title: "Week2"
+format: html
+editor: visual
+---
+
+```{r}
+library(devtools)
+install_github('Chrisjb/basemapR')
+
+```
+
+```{r}
+# Load the 'sf' library, which stands for Simple Features, used for working with spatial data.
+library(sf)
+# Load the 'tidyverse' library, a collection of packages for data manipulation and visualization.
+library(tidyverse)
+# Load the 'tmap' library, which is used for creating thematic maps and visualizing spatial data.
+library(tmap)
+# The 'readr' library provides a fast and user-friendly way to read data from common formats like CSV.
+library(readr)
+# Converts Between GeoJSON and simple feature objects
+library(geojsonsf) 
+# Using data from OpenStreetMap (OSM)
+library(osmdata)
+# Static maps
+library(basemapR)
+
+
+
+```
+
+```{r}
+poi_df = tribble(
+  ~name, ~lon, ~lat,
+  "The British Museum",        -0.1459604, 51.5045975,
+  "Big Ben",    -0.1272057, 51.5007325,
+  "King's Cross", -0.1319481, 51.5301701,
+  "The Natural History Museum",     -0.173734, 51.4938451
+)
+poi_sf = sf::st_as_sf(poi_df, coords = c("lon", "lat"), crs = "EPSG:4326")
+```
+
+```{r}
+view(poi_df)
+```
+
+```{r}
+districts <- read_sf("C:/Users/Aanand/Desktop/ENVS363+563/gds-main/data/London/Polygons/districts.shp")
+
+plot(districts$geometry) # Create a simple plot
+```
+
+```{r}
+a_roads <- read_sf("C:/Users/Aanand/Desktop/ENVS363+563/gds-main/data/London/Lines/a_roads.shp")
+
+# If you needed to import a `geojson` this would be the function.
+#a_roads <- geojson_sf("data/London/Lines/a_roads.geojson")
+
+plot(a_roads$geometry)
+```
+
+```{r}
+osm_q_sf <- opq("Greater London, U.K.") %>% # searching only in Greater London
+    add_osm_feature(key = "building", value = "museum") %>% #adding osm data that is tagged as a museum
+  osmdata_sf () # transforming to sf object
+```
+
+```{r}
+osm_q_sf  
+```
+
+```{r}
+head(districts) # the command "head" reads the first 5 rows of the data
+```
+
+```{r}
+districts[1,]
+districts[,1]
+districts[1,1]
+
+```
+
+```{r}
+districts$DIST_NAME
+```
+
+```{r}
+# dataframe can be subsetted using conditional statement
+# read the rows which have "City of London" as value for DIST_NAME
+districts[districts$DIST_NAME== "City of London",] 
+```
+
+```{r}
+# plot london in grey
+plot(districts$geometry, col = "lightgrey")
+
+# Add city of London in turquoise to the map
+plot(districts[districts$DIST_NAME == "Hackney", ]$geometry, # select city of london
+     col = "turquoise",
+     add = T) # add to the existing map
+```
+
+```{r}
+plot(districts$geometry, reset = T) # reset
+
+```
+
+```{r}
+plot(districts$geometry)
+plot(a_roads$geometry, add=T) # note the `add=T` is adding the second layer.
+```
+
+```{r}
+ggplot() +
+ geom_sf(data = districts, color = "black") +  # Plot districts with black outline
+  geom_sf(data = a_roads, color = "brown") +  # Plot roads with brown color and 50% transparency
+  theme_minimal() 
+```
+
+```{r}
+ggplot() +
+  geom_sf(data = districts, fill = NA, color = "black") +  # Plot districts with black outline & no fill (NA)
+  geom_sf(data = a_roads, color = "brown", alpha = 0.5) +  # Plot roads with brown color and 50% transparency
+  theme_minimal()
+```
+
+```{r}
+ggplot() +
+  geom_sf(data = districts, fill = NA, color = "black") +  # Plot districts with black outline & no fill (NA)
+  geom_sf(data = a_roads, color = "brown", alpha = 0.5) +  # Plot roads with brown color and 50% transparency
+  theme(line = element_blank(), # remove tick marks
+        rect = element_blank(), # remove background
+        axis.text=element_blank()) # remove x and y axis
+```
+
+```{r}
+ggplot() +
+  geom_sf(data = districts, fill = NA, color = "black") +  # Plot districts with black outline & no fill (NA)
+  geom_sf(data = a_roads, color = "brown", alpha = 0.5) +  # Plot roads with brown color and 50% transparency
+  theme_void() + # 
+  ggtitle("Some London roads") #add ggtitle
+```
+
+```{r}
+ggplot() +
+  geom_sf(data = districts, fill = NA, color = "black") +  
+  geom_sf(data = a_roads, color = "brown", alpha = 0.5) + 
+  geom_sf(data = poi_sf, color = "blue", size = 3) + # size adjusts size of visualization
+  theme_void() +
+  ggtitle("Some London Roads") #add ggtitle
+```
+
+```{r}
+ggplot() +
+  geom_sf(data = districts,
+          fill = "gray95") +
+  geom_sf_text(data = districts,
+               aes(label = DIST_NAME),
+               fun.geometry = sf::st_centroid, size=2) +
+  theme_void()
+```
+
+```{r}
+st_crs(districts) # retrieve coordinate reference system from object
+```
+
+```{r}
+st_crs(districts)$IsGeographic # to check is the CRS is geographic or not
+
+st_crs(districts)$units_gdal # to find out the CRS units
+
+st_crs(districts)$srid # extracts its SRID (when available)
+
+st_crs(districts)$proj4string # extracts the proj4string representation
+```
+
+```{r}
+districts_4326 = st_transform(districts, "EPSG:4326") # set CRS
+# districts_4326 <- st_transform(districts_4326, crs = 4326)
+```
+
+```{r}
+housesales <- read.csv("C:/Users/Aanand/Desktop/ENVS363+563/gds-main/data/London/Tables/housesales.csv") # import housesales data from csv
+
+# 3 commands: 
+housesales_filtered = filter(housesales,price < 500000)
+housesales_sf <- st_as_sf(housesales_filtered, coords = c(17,18)) # denote columns which have the coordinates
+housesales_clean <- st_set_crs(housesales_sf, 27700)# set crs to British National Grid 
+```
+
+```{r}
+# all one in go and one output
+housesales_clean = housesales %>% # select the main object
+  filter(price < 500000) %>% # remove values above 500,000
+  st_as_sf(coords = c(17,18)) %>% # # denote columns which have the coordinates
+  st_set_crs(27700) # set crs to British National Grid
+```
+
+```{r}
+ggplot() + 
+ geom_sf(data = districts_4326$geometry) + 
+  geom_sf(data = poi_sf$geometry, fill = 'blue', size = 3) + 
+  coord_sf(xlim = c(-0.180723,-0.014212), ylim = c(51.476668,51.532337)) +
+   theme_void()
+```
+
+```{r}
+districts <- districts %>%
+  mutate(area = st_area(.)/1000000) # calculate area and make it km2
+
+a_roads <- a_roads %>%
+  mutate(street_length = st_length(geometry)) # calculate street length in metres
+
+  
+```
+
+```{r}
+# Create a dataframe with centroids
+centroids_df <- districts %>%
+  st_centroid()
+
+ggplot() +
+  geom_sf(data = districts) +  # Plot the districts segments
+  geom_sf(data = centroids_df, color = "red", size = 2) +  # Plot the centroids in red
+  theme_minimal()
+```
+
+```{r}
+# buffer
+centroid_buffers <- st_buffer(centroids_df, 1000)
+
+ggplot() +
+  geom_sf(data = districts) +  # Plot the districts segments
+  geom_sf(data = centroids_df, color = "red", size = 2) +  # Plot the centroids in red
+  geom_sf(data = centroid_buffers, color = "darkred", size = 2) +  # Plot the buffers of the centroids
+  theme_minimal()
+```
+
+```{r}
+# import qualifications data from csv
+qualifications2001_df <- read.csv("C:/Users/Aanand/Desktop/ENVS363+563/gds-main/data/London/Tables/qualifications2001_2.csv")
+
+# take a quick look at the table by reading the first 5 lines
+head(qualifications2001_df)
+```
+
+```{r}
+#join
+districts <- left_join(districts, 
+                       qualifications2001_df, 
+                       by=c("DIST_CODE"="Zone_Code"))
+
+# tidyverse alternative with pipe operator %>%
+
+districts_tidy <- districts %>%
+  left_join(qualifications2001_df, by=c("DIST_CODE"="Zone_Code"))
+
+# check the first rows of the merged data table
+head(districts)
+
+
+```
+
+```{r}
+districts <- districts %>%
+  mutate(Level4p = Level4/Population1674)
+```
+
+```{r}
+#dir.create("maps") 
+
+pdf("C:/Users/Aanand/Desktop/ENVS363+563/gds-main/maps/london_test.pdf") # Opening the graphical device
+plot(districts$geometry)
+plot(housesales_clean$geometry, add=TRUE) 
+dev.off() # Closing the graphical device
+```
+
+```{r}
+test_map <- ggplot() 
+  geom_sf(data = districts, aes(fill = Level4p)) +
+  theme_void() 
+```
+
+```{r}
+ggsave("maps/map3.pdf")
+```
+
+```{r}
+ggplot() +
+  base_map(st_bbox(districts_4326), increase_zoom = 2) + 
+  geom_sf(data = districts_4326, fill = NA)
+```
+
+```{r}
+ggplot() +
+  base_map(st_bbox(districts_4326), basemap = 'google-terrain', increase_zoom = 2) +
+  geom_sf(data = districts_4326, fill = NA) +
+  geom_sf(data = poi_sf) +
+  ggthemes::theme_map()
+```
+
+```{r}
+library(basemaps)
+```
+
+```{r}
+library(leaflet)
+popup = c("The British Museum", "Big Ben", "King's Cross", "The Natural History Museum")
+leaflet() %>%
+  addProviderTiles("CartoDB.Positron") %>%
+  addMarkers(lng = c(-0.1459604, -0.1272057, -0.1319481, -0.173734),
+             lat = c(51.5045975, 51.5007325, 51.5301701, 51.4938451), 
+             popup = popup)
+```
+
+```{r}
+library(sf)
+lsoas <- read_sf("C:/Users/Aanand/Desktop/ENVS363+563/gds-main/data/Liverpool/Census_Residential_Data_Pack_2011/Local_Authority_Districts/E08000012/shapefiles/E08000012.shp")
+```
+
+```{r}
+highway <- opq("Liverpool, U.K.") %>%
+   add_osm_feature(key = "highway", 
+                   value = c("primary", "secondary", "tertiary")) %>%
+   osmdata_sf()
+
+ggplot() + 
+  geom_sf(data = highway$osm_lines, color = 'darkorange') + theme_minimal() 
+```
+
+```{r}
+bars <- opq("Liverpool, U.K.") %>%
+   add_osm_feature(key = "amenity", 
+                   value = c("bar")) %>%
+   osmdata_sf()
+
+ggplot() + 
+  geom_sf(data = bars$osm_points) + theme_minimal() 
+```
+
+```{r}
+ggplot() +
+   ggtitle("Some Liverpool roads") + 
+  theme_void() +
+   geom_sf(data = lsoas, color = "#525252", alpha = 0.5) +
+   geom_sf(data = bars, color = "blue", size = 3) 
+
+ggplot() +
+  ggtitle("Some Liverpool roads") + 
+  theme_void() +
+  geom_sf(data = lsoas, fill = NA, color = "black") +
+  geom_sf(data = highway, color = "gray", alpha = 0.5) +
+  geom_sf(data = bars, color = "blue", size = 3)
+```
+
+```{r}
+lsoas <- lsoas %>%
+  mutate(area = st_area(.)/1000000) # calculate area and make it km2
+
+minarea <- desc(lsoas$area)
+
+head(minarea)
+```
+
+```{r}
+# plot london in grey
+plot(lsoas$geometry, col = "lightgrey")
+
+# Add city of London in turquoise to the map
+plot(lsoas[lsoas$lsoa11cd == "E01033766", ]$geometry,
+     
+   #  lsoas[lsoas$lsoa11cd == "E01033766", "E01033757" ,"E01033767", "E01006614" ,"E01006611" ]$geometry,
+     col = "red",
+     add = T) # add to the existing map
+```
+
+```{r}
+head(highway)
+```
+
+```{r}
+housesales_districts <- st_join(districts, housesales_clean)
+```
+
+```{r}
+housesales_districts_agg <- housesales_districts %>% 
+  group_by(DIST_CODE, DIST_NAME) %>% # group at district level
+  summarise(count_sales = n(),  # create count
+            mean_price = mean(price)) # average price
+```
+
+```{r}
+head(housesales_districts_agg)
+```
+
+```{r}
+# map housesales by wards
+map3 <- ggplot()+
+  geom_sf(data = housesales_districts_agg, inherit.aes = FALSE, aes(fill = mean_price)) + # add the district level housing price 
+  scale_fill_viridis("Price", direction = -1, labels = scales::dollar_format(prefix = "£"), option = "magma" )+ # change the legend scale to £ and the colour to magma
+  xlab("") +
+  ylab("") +
+  theme_minimal() # choose a nicer theme https://ggplot2.tidyverse.org/reference/ggtheme.html
+map3
+```
+
+```{r}
+install.packages("viridis")
+library(viridis)
+```

@@ -1,0 +1,343 @@
+---
+title: "Week6"
+format: html
+editor: visual
+---
+
+```{r}
+library(sf)
+library(tmap)
+library(rosm)
+library(spdep)
+library(ggplot2)
+library(tidyr)
+library(patchwork)
+```
+
+```{r}
+# Read the file in
+br <- read_sf("C:/Users/Aanand/Desktop/ENVS363+563/gds-main/data/UK-brexit/brexit.gpkg")
+```
+
+```{r}
+base = osm.raster(br)
+
+tm_shape(base) + tm_rgb() +
+  tm_shape(br) +  
+  tm_borders(col = "white", lwd = 0.5) +  
+  tm_fill(col = "coral1", alpha=0.5) +
+  tm_compass(position = c("left", "top")) + 
+  tm_scale_bar(position = c("right", "bottom")) 
+```
+
+```{r}
+# list all adjacent polygons for each polygon
+nb_q <- poly2nb(br, queen = TRUE) # Construct neighbours list from polygon list
+```
+
+```{r}
+w_queen <- nb2listw(nb_q, style = "B") # Create a spatial weights matrix using queen contiguity
+
+```
+
+```{r}
+w_queen <- nb2listw(nb_q, style = "B", zero.policy=TRUE) # Create a spatial weights matrix using queen contiguity
+```
+
+```{r}
+isolates <- which(w_queen$neighbours == "0")
+```
+
+```{r}
+br <- br[-c(isolates),]
+```
+
+```{r}
+# list all adjacent polygons for each polygon
+nb_q <- poly2nb(br, queen = TRUE) # Construct neighbours list from 
+w_queen_std <- nb2listw(nb_q, style = "W") # Create a spatial weights matrix using queen contiguity and row-standardardised weights
+```
+
+```{r}
+br$w_Pct_Leave <- lag.listw(w_queen_std, br$Pct_Leave)
+```
+
+```{r}
+head(br$Pct_Leave)
+
+head(br$w_Pct_Leave)
+```
+
+```{r}
+w_queen_std$neighbours[[1]]
+br$Pct_Leave[[4]]
+br$Pct_Leave[[46]]
+mean(c(br$Pct_Leave[[4]], br$Pct_Leave[[46]]))
+```
+
+```{r}
+br$Pct_Leave_std <- (br$Pct_Leave - mean(br$Pct_Leave))/sd(br$Pct_Leave)
+```
+
+```{r}
+br$w_Pct_Leave_std <- lag.listw(w_queen_std, br$Pct_Leave_std)
+```
+
+```{r}
+# Create a standardized Moran plot using ggplot2
+moran_plot_z <- ggplot(br, aes(x=Pct_Leave_std, y=w_Pct_Leave_std)) + 
+  geom_point() +
+  geom_smooth(method=lm) +
+  geom_hline(aes(yintercept = 0)) +
+  geom_vline(aes(xintercept = 0)) +
+  labs(title="Standardised Moran plot", x="% Leave z-score", y = "Lagged % leave")
+
+# Apply a minimal theme to the standardized Moran plot
+moran_plot_z + theme_minimal()  
+```
+
+```{r}
+moran.mc(br$Pct_Leave, w_queen_std, nsim=1000, alternative="greater")
+```
+
+```{r}
+# Create a standardized Moran plot using ggplot2
+moran_plot_z <- ggplot(br, aes(x=Pct_Leave_std, y=w_Pct_Leave_std)) + 
+  geom_point() +
+  geom_smooth(method=lm) +
+  geom_hline(aes(yintercept = 0)) +
+  geom_vline(aes(xintercept = 0)) +
+  labs(title="Standardised Moran plot", x="% Leave z-score", y = "Lagged % leave") +
+  geom_label(aes(x=2.0, y=0.5, label="HH")) + 
+  geom_label(aes(x=1.5, y=-1.5, label="HL")) + 
+  geom_label(aes(x=-2, y=1.0, label="LH")) + 
+  geom_label(aes(x=-1.5, y=-2.5, label="LL")) 
+
+# Apply a minimal theme to the standardized Moran plot
+moran_plot_z + theme_minimal()  
+```
+
+```{r}
+lisa_perm <- localmoran_perm(br$Pct_Leave, w_queen_std, nsim=1000, alternative="two.sided")
+head(lisa_perm)
+```
+
+```{r}
+quadrants <- hotspot(lisa_perm, Prname="Pr(z != E(Ii)) Sim", cutoff=0.1)
+quadrants
+```
+
+```{r}
+br$quadrant <- as.character(quadrants)  %>% replace_na("Not significant")
+```
+
+```{r}
+head(br)
+```
+
+```{r}
+unique(br$quadrant)
+```
+
+```{r}
+map_pct <- tmap::tm_shape(br) +
+  tmap::tm_fill(col = "Pct_Leave", palette = viridisLite::viridis(6), title="% Leave voters") +
+  tm_borders(col = "black", lwd = 0.3)+
+  labs(title = "% Leave voters")+
+  tm_compass(position = c(0.01, 0.03)) + 
+  tm_scale_bar(position = c(0.6, 0.03)) + 
+  tm_layout(legend.text.size = 0.5, inner.margins = c(0.1, 0.1, 0.02, 0.05), legend.position = c(0.65,0.76), legend.width=0.5, bg.color="aliceblue") 
+
+borders <- tm_shape(br) + 
+  tm_fill() +
+  tm_borders(col = "black", lwd = 0.3)
+
+hh <- br %>% dplyr::filter(quadrant == "High-High")
+hh_map <- tm_shape(hh) +  
+  tm_fill(col = "royalblue2", alpha=0.8)
+
+ll <- br %>% dplyr::filter(quadrant == "Low-Low")
+ll_map <- tm_shape(ll) +  
+  tm_fill(col = "red2", alpha=0.8)
+
+lh <- br %>% dplyr::filter(quadrant == "Low-High")
+lh_map <- tm_shape(lh) +  
+  tm_fill(col = "gold", alpha=0.8)
+
+ns <- br %>% dplyr::filter(quadrant == "Not significant")
+ns_map <- tm_shape(ns) +  
+  tm_fill(col = "lightgrey", alpha=0.8)
+
+
+# Combine all the maps, add compass, scale bar, and legend
+final_map_cluster <- borders +
+  hh_map + ll_map + lh_map + ns_map +
+  tm_compass(position = c(0.01, 0.03)) + 
+  tm_scale_bar(position = c(0.6, 0.03)) + 
+  tm_add_legend(type = "fill", col = c("royalblue2", "red2", "darkgreen", "gold", "lightgrey"), 
+                labels = c("High-High", "Low-Low", "High-Low", "Low-High", "Not significant"), title = "LISA cluster") +
+  tm_layout(legend.text.size = 0.5, inner.margins = c(0.1, 0.1, 0.02, 0.05), legend.position = c(0.65,0.75), legend.width=0.5, bg.color="aliceblue")
+
+tmap_arrange(map_pct, final_map_cluster)
+```
+
+```{r}
+color_values <- c(`High-High` = "royalblue2", 
+                  `Low-Low` = "red2", 
+                  `High-Low` = "darkgreen",
+                  `Low-High` = "gold", 
+                  `Not significant` = "lightgrey")
+
+moranLISA <- ggplot(br, aes(x=Pct_Leave_std, 
+               y=w_Pct_Leave_std,
+               fill = quadrant)) + 
+  geom_point(color = "black", shape = 21, size = 2) + 
+  theme_minimal() +
+  geom_hline(yintercept = 0, linetype = "dashed") + 
+  geom_vline(xintercept = 0, linetype = "dashed") + 
+  scale_fill_manual(values=color_values) +
+  labs(title="Standardised Moran plot",
+        x="% Leave z-score", 
+        y = "Lagged % leave",
+        fill = "Cluster type")
+
+moranLISA
+```
+
+```{r}
+# Data
+x <- c(1, 2, 4, 8, 16, 32)
+y <- c(1.682, 2.926, 5.705, 11.094, 20.355, 37.696)
+
+# Plotting
+plot(x, y, type = "o", col = "blue", pch = 16, main = "Speedup Plot for cheapest", xlab = "no. of threads", ylab = "Speedup")
+
+# Adding labels to each point
+text(x, y, labels = c("1", "2", "4", "8", "16", "32"), pos = 3, col = "red")
+
+# Adding a grid
+grid()
+
+
+```
+
+```{r}
+# Data
+x <- c(1, 2, 4, 8, 16, 32)
+y <- c(2.563, 4.697, 9.100, 16.680, 29.927, 43.475)
+
+# Plotting
+plot(x, y, type = "o", col = "green", pch = 16, main = "Speedup Plot for farthest", xlab = "no. of threads", ylab = "Speedup")
+
+# Adding labels to each point
+text(x, y, labels = c("1", "2", "4", "8", "16", "32"), pos = 3, col = "blue")
+
+# Adding a grid
+grid()
+
+
+```
+
+```{r}
+# Data
+data <- data.frame(
+  x_y = c(1, 2, 4, 8, 16, 32),
+  efficiency = c(1.682, 1.463, 1.426, 1.386, 1.272, 1.178)
+)
+
+# Create a scatter plot with a line
+ggplot(data, aes(x = x_y, y = efficiency)) +
+  geom_point() +
+  geom_line() +
+  labs(title = "Parallel Efficiency for cheapest",
+       x = "Number of Threads",
+       y = "Parallel Efficiency") +
+  theme_minimal()
+
+```
+
+```{r}
+
+# Data
+data <- data.frame(
+  x_y = c(1, 2, 4, 8, 16, 32),
+  efficiency = c(2.563, 2.348, 2.275, 2.085, 1.870, 1.358)
+)
+
+# Create a scatter plot with a line
+ggplot(data, aes(x = x_y, y = efficiency)) +
+  geom_point() +
+  geom_line() +
+  labs(title = "Parallel Efficiency for farthest",
+       x = "Number of Threads",
+       y = "Parallel Efficiency") +
+  theme_minimal()
+
+```
+
+```{r}
+# Install and load necessary libraries
+if (!requireNamespace("ggplot2", quietly = TRUE)) {
+  install.packages("ggplot2")
+}
+if (!requireNamespace("dplyr", quietly = TRUE)) {
+  install.packages("dplyr")
+}
+if (!requireNamespace("gridExtra", quietly = TRUE)) {
+  install.packages("gridExtra")
+}
+if (!requireNamespace("scales", quietly = TRUE)) {
+  install.packages("scales")
+}
+library(ggplot2)
+library(dplyr)
+library(gridExtra)
+library(scales)
+
+# Your data
+data <- read.table(text = "Task_Name Duration Start_Date End_Date
+Make_group 11 25-Sep-23 06-Oct-23
+Topic_Selection 17 25-Sep-23 12-Oct-23
+Define_Scope 14 06-Oct-23 20-Oct-23
+Conduct_initial_research 3 02-Oct-23 05-Oct-23
+Selection_of_Sources 4 02-Oct-23 06-Oct-23
+Read_and_summarize_Literature 14 01-Oct-23 15-Oct-23
+Develop_an_Outline 5 12-Oct-23 17-Oct-23
+Create_Presentation 1 15-Oct-23 16-Oct-23
+Revise_and_Edit 1 17-Oct-23 18-Oct-23
+Incorporate_Feedback 29 19-Oct-23 17-Nov-23
+Finalize_Literature_Review 17 20-Nov-23 07-Dec-23
+Proofread_and_format 3 09-Dec-23 12-Dec-23
+Submit_Paper 2 12-Dec-23 14-Dec-23",
+header = TRUE, stringsAsFactors = FALSE)
+
+# Convert date columns to Date format
+data$Start_Date <- as.Date(data$Start_Date, format = "%d-%b-%y")
+data$End_Date <- as.Date(data$End_Date, format = "%d-%b-%y")
+
+# Reverse the order of Task_Name
+data$Task_Name <- factor(data$Task_Name, levels = rev(data$Task_Name))
+
+
+# Calculate the end of each task
+data$End <- data$Start_Date + data$Duration
+
+# Create Gantt chart
+gantt <- ggplot(data, aes(x = Start_Date, xend = End, y = Task_Name, yend = Task_Name)) +
+  geom_segment(size = 8, color = "orange") +
+  theme_minimal() +
+  labs(title = "Project Gantt Chart", x = "Timeline", y = "") +
+  scale_x_date(date_breaks = "1 week", date_labels = "%d-%b")
+
+# Create table
+table_plot <- ggplot(data, aes(x = "", y = Task_Name, label = paste(Duration, " days"))) +
+  geom_text(aes(y = Task_Name, label = paste(Duration, " days")), size = 3) +
+  theme_void() +
+  theme(axis.text = element_blank(), axis.title = element_blank())
+
+# Arrange Gantt chart and table side by side
+grid.arrange(gantt, table_plot, ncol = 2, widths = c(4, 1))
+
+# Save the combined plot
+ggsave("gantt_chart_with_table.png", width = 10, height = 5)
+```

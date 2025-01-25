@@ -1,2 +1,2 @@
-# ENVS363-563
-Weekly projects for Geo Data Science
+#Weekly projects for Geo Data Science
+We will learn all concepts of Geographical data science
